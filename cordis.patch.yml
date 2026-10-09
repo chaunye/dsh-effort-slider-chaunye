@@ -1,0 +1,8 @@
+# Bundle patch layer for dsh-effort-slider-chaunye.
+#
+# The entry name is the BARE package name on purpose: the Client-module scanner
+# resolves `<name>/package.json` through the Loader, so a subpath entry would be
+# cached as "not a client package" and the browser half would silently never load.
+- insert:
+    - id: effort-slider
+      name: 'dsh-effort-slider-chaunye'

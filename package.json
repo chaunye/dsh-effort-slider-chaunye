@@ -1,0 +1,55 @@
+{
+  "name": "dsh-effort-slider-chaunye",
+  "version": "0.3.0",
+  "description": "推理等级滑条：在 DSH Web composer 的模型选择器旁加一个胶囊，点开是整宽渐变滑条（蓝→紫随档位推进、流光扫过、白钮拖动），复用官方模型目录的会话状态。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md",
+    "PORTING.md",
+    "icon.svg",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "reasoning-effort",
+    "effort-slider",
+    "thinking-level",
+    "web-ui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chaunye/dsh-effort-slider-chaunye.git"
+  },
+  "homepage": "https://github.com/chaunye/dsh-effort-slider-chaunye#readme",
+  "bugs": {
+    "url": "https://github.com/chaunye/dsh-effort-slider-chaunye/issues"
+  },
+  "author": "chaunye (https://github.com/chaunye)",
+  "icon": "./icon.svg",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection"
+      ]
+    },
+    "manifestVersion": 1
+  },
+  "license": "MIT"
+}

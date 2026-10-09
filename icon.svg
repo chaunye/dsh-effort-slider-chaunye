@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="dsh-effort-slider">
+  <defs>
+    <linearGradient id="ramp" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3964fe"/>
+      <stop offset="0.5" stop-color="#8b76f6"/>
+      <stop offset="1" stop-color="#c5c0ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#0f1115"/>
+  <rect x="20" y="57" width="88" height="14" rx="7" fill="url(#ramp)"/>
+  <circle cx="92" cy="64" r="17" fill="#ffffff"/>
+  <rect x="20" y="88" width="20" height="7" rx="3.5" fill="#ffffff" opacity="0.35"/>
+  <rect x="48" y="88" width="20" height="7" rx="3.5" fill="#ffffff" opacity="0.35"/>
+  <rect x="76" y="88" width="20" height="7" rx="3.5" fill="#ffffff" opacity="0.35"/>
+</svg>

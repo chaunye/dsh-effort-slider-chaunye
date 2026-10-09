@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Machine-local notes and handoff reports (contain local paths / environment facts)
+*.local.md
+PORTING-MIMO-VERDICT.md
