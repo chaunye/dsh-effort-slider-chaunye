@@ -14,7 +14,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const FILES = ['package.json', 'cordis.patch.yml', 'index.js', 'client.js', 'README.md']
+const FILES = ['package.json', 'cordis.patch.yml', 'index.js', 'client.js', 'README.md', 'PORTING.md', 'icon.svg', 'LICENSE']
 const MODEL_ID = 'DeepSeek-V4.1-Flash'
 
 const sourceDir = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -67,19 +67,41 @@ for (const file of FILES) {
 log(`copied : ${FILES.length} files -> node_modules/${PACKAGE_NAME}`)
 
 // --- 3. mount the bundle ----------------------------------------------------
+// Two manifest halves matter, and a hand install must write BOTH:
+//   dsh.profile.bundles  -> the row loads at boot (what the plugin DOES)
+//   dependencies         -> what Settings > Plugins reports as `installed`
+// The list page filters on `installed` (plugin-manager/src/index.ts reads
+// Object.keys(manifest.dependencies), and ui-plugin-manager drops any bundle
+// that is neither installed, optional, nor errored). Declaring only the bundle
+// half therefore yields a plugin that works but never appears in the list.
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
 manifest.dsh ??= {}
 manifest.dsh.profile ??= {}
 manifest.dsh.profile.bundles ??= []
+manifest.dependencies ??= {}
 const before = [...manifest.dsh.profile.bundles]
-if (manifest.dsh.profile.bundles.includes(PACKAGE_NAME)) {
-  log(`bundles: already mounted (${before.length} entries)`)
-} else {
+let changed = false
+if (!manifest.dsh.profile.bundles.includes(PACKAGE_NAME)) {
   manifest.dsh.profile.bundles.push(PACKAGE_NAME)
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+  changed = true
   log(`bundles: ${before.join(', ')}`)
   log(`      -> ${manifest.dsh.profile.bundles.join(', ')}`)
+} else {
+  log(`bundles: already mounted (${before.length} entries)`)
 }
+if (!Object.hasOwn(manifest.dependencies, PACKAGE_NAME)) {
+  // A file: specifier pointing at the copied directory keeps the declaration
+  // honest about where the code came from. pnpm rewrites it on the next real
+  // install, which is the intended upgrade path.
+  manifest.dependencies[PACKAGE_NAME] = `file:${targetDir.replace(/\\/g, '/')}`
+  changed = true
+  log(`deps   : declared ${PACKAGE_NAME} so the plugin list reports it as installed`)
+  log('         (the pnpm lockfile is NOT updated by this script; a later')
+  log('         `dsh plugin add` or pnpm install will reconcile it)')
+} else {
+  log('deps   : already declared')
+}
+if (changed) writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
 
 // --- 4. declare the reasoning levels ---------------------------------------
 if (!applyConfig) {

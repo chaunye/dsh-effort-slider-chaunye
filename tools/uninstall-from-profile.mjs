@@ -3,7 +3,7 @@
 // Restore the newest install backup and remove the copied plugin directory.
 //
 //   node tools/uninstall-from-profile.mjs [--profile <dir>] [--name <installed package name>]
-import { existsSync, readdirSync, rmSync, copyFileSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -41,6 +41,28 @@ for (const [path, fileName] of [[manifestPath, 'package.json'], [patchPath, 'cor
   copyFileSync(backup, path)
   console.log(`restored ${fileName} from ${backup}`)
   restored += 1
+}
+
+// Without this profile's own backup, a restore is impossible; drop just this
+// package from both manifest halves instead. Leaving either one behind is worse
+// than removing the directory: a selected-but-absent bundle fails the boot, and
+// a dependency-only leftover keeps showing in the plugin list as uninstalled.
+if (restored === 0 && existsSync(manifestPath)) {
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  let changed = false
+  const bundles = manifest.dsh?.profile?.bundles
+  if (Array.isArray(bundles) && bundles.includes(PACKAGE_NAME)) {
+    manifest.dsh.profile.bundles = bundles.filter((name) => name !== PACKAGE_NAME)
+    changed = true
+  }
+  if (Object.hasOwn(manifest.dependencies ?? {}, PACKAGE_NAME)) {
+    delete manifest.dependencies[PACKAGE_NAME]
+    changed = true
+  }
+  if (changed) {
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+    console.log(`deselected ${PACKAGE_NAME} from bundles and dependencies (no backup was available)`)
+  }
 }
 
 if (existsSync(targetDir)) {
