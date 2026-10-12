@@ -58,6 +58,16 @@ node tools/validate.mjs    # 清单/产物规则校验（含一条 portal 自定
 node tools/smoke.mjs       # 36 项行为断言，无需浏览器（自带微型 hook 运行时驱动组件）
 ```
 
+装进某个 profile 后，还可以用 DSH 自己的启动代码离线验证组合结果（需以 Electron 的 Node 模式运行，因为插件宿主代码在 `app.asar` 内）：
+
+```powershell
+$env:ELECTRON_RUN_AS_NODE = "1"
+& "<安装目录>\DeepSeek Harness.exe" --expose-internals `
+    tools\verify-profile-composition.mjs "<安装目录>\resources\app.asar" "<home>\.dsh\profiles\desktop"
+```
+
+它打印 `COMPOSITION OK` / `COMPOSITION INCOMPLETE`，并分别报告「loader 里有没有这一行」和「设置里的插件列表会不会显示它」。注意列表页只列 `installed`（即 profile `dependencies` 里声明了该包）的 bundle，所以只往 `dsh.profile.bundles` 追加名字会让插件**能加载但不出现在列表里**——这个脚本就是用来抓这种半装状态的。
+
 想移植到其它宿主（MiMo / OpenCode 等）请读 [`PORTING.md`](./PORTING.md)：里面逐行标出了「DSH 专属层」与「可移植层」。
 
 ## 许可证
