@@ -159,9 +159,9 @@ window.__ModuleLoader__.load({
       return mixHex(FILL_BLUE, TEXT_VIOLET, energyFor(pct));
     }
 
-    /** Stardust layer opacity: hidden with no particles, else 0.6 + 0.4 × energy. */
+    /** Stardust layer opacity: hidden with no particles, else 0.85 + 0.15 × energy. */
     function starLayerOpacityFor(pct) {
-      return particleCountFor(pct) > 0 ? 0.6 + 0.4 * energyFor(pct) : 0;
+      return particleCountFor(pct) > 0 ? 0.85 + 0.15 * energyFor(pct) : 0;
     }
 
     /** Per-star traverse seconds at one position (before the ±spread). */
@@ -237,21 +237,22 @@ window.__ModuleLoader__.load({
       'background:linear-gradient(105deg,transparent 20%,rgba(255,255,255,.28) 50%,transparent 80%);',
       'transform:translateX(-100%);animation:dsh-effort-shimmer 2.2s linear infinite}',
       '@keyframes dsh-effort-shimmer{to{transform:translateX(100%)}}',
-      /* Stardust rides in its own layer (never darkened by the nebula's opacity). */
-      '.dsh-effort-stars{position:absolute;top:0;bottom:0;left:0;',
-      'width:calc(' + KNOB_INSET + 'px + var(--pct,0) * (100% - ' + TRACK_HEIGHT + 'px));',
-      'border-radius:999px 0 0 999px;overflow:hidden;pointer-events:none;transition:opacity 150ms ease}',
-      '.dsh-effort-star{position:absolute;left:0;right:0;height:3px;margin-top:-1.5px;pointer-events:none;',
+      /* Stardust rides in its own layer spanning the WHOLE track (no width
+         clamp): the lane is full-width and its dot enters from the right edge,
+         so stars stream right-to-left across the entire bar — including the
+         unfilled middle and tail. Clamping the layer to the fill width is what
+         made the middle and tail look dead. */
+      '.dsh-effort-stars{position:absolute;inset:0;border-radius:999px;overflow:hidden;pointer-events:none;transition:opacity 150ms ease}',
+      '.dsh-effort-star{position:absolute;left:0;right:0;height:4px;margin-top:-2px;pointer-events:none;',
       'will-change:transform,opacity;animation-name:dsh-effort-star-sweep;animation-timing-function:linear;',
       'animation-iteration-count:infinite}',
-      '.dsh-effort-star__dot{position:absolute;left:100%;top:0;width:3px;height:3px;margin-left:-1.5px;',
-      'border-radius:50%;background:#fff;box-shadow:0 0 6px rgba(216,180,254,.95);',
+      '.dsh-effort-star__dot{position:absolute;left:100%;top:0;width:4px;height:4px;margin-left:-2px;',
+      'border-radius:50%;background:#fff;box-shadow:0 0 7px rgba(216,180,254,.95),0 0 12px rgba(216,180,254,.5);',
       'opacity:var(--ces-b,1);transform:scale(var(--ces-b,1))}',
       'body[data-ds-dark-theme] .dsh-effort-star__dot{background:#f5f3ff}',
       /* Full-lane traverse with fade only at the invisible ends: stars pour out
          of the knob side and never vanish mid-track. */
-      '@keyframes dsh-effort-star-sweep{0%{transform:translate3d(100%,0,0);opacity:0}',
-      '6%{opacity:1}94%{opacity:1}100%{transform:translate3d(-10%,0,0);opacity:0}}',
+      '@keyframes dsh-effort-star-sweep{0%{transform:translate3d(0,0,0);opacity:0}6%{opacity:1}94%{opacity:1}100%{transform:translate3d(-100%,0,0);opacity:0}}',
       /* Micro ticks: reached ones brighten (they sit on the coloured fill, so
          white reads on both themes); unreached ones stay dim. */
       '.dsh-effort-tick{position:absolute;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;',

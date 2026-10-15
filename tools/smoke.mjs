@@ -372,6 +372,7 @@ console.log('case: a single declared level degrades to a badge')
 
 console.log('case: the Codex spec drivers — fill colour, energy, particles, speed')
 {
+  // The bundle does not export internals; assert against the shipped CSS text.
   const parts = (effort) => {
     const harness = mount(stateFor({
       current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: effort },
@@ -415,6 +416,19 @@ console.log('case: the Codex spec drivers — fill colour, energy, particles, sp
   check('stardust layer is invisible with no particles and fully visible at the top',
     String(off.starOpacity) === '0.000' && String(ultra.starOpacity) === '1.000',
     `off=${off.starOpacity} ultra=${ultra.starOpacity}`)
+
+  // ⚠️ 回归锁：星尘层必须覆盖**整条轨道**（inset:0）。绑到填充宽度会让粒子
+  //    只在填充段里飞 —— 中段与尾部全空（真机反馈"只有前段有动效"）。
+  //    星云层例外：它就该只盖已通电的填充段。
+  const css = source
+  const starsRule = /\.dsh-effort-stars\{([^}]*)\}/.exec(css)
+  check('the stardust layer spans the whole track, not the fill width',
+    starsRule !== null && starsRule[1].includes('inset:0') && !starsRule[1].includes('width:calc'),
+    starsRule === null ? '(rule not found)' : starsRule[1].slice(0, 90))
+  const nebulaRule = /\.dsh-effort-nebula\{([^}]*)\}/.exec(css)
+  check('the nebula still covers only the filled segment (by design)',
+    nebulaRule !== null && nebulaRule[1].includes('width:calc'),
+    nebulaRule === null ? '(rule not found)' : nebulaRule[1].slice(0, 90))
 }
 
 console.log('case: the fill and knob share the inset coordinate and ride the draft')
