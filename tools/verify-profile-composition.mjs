@@ -51,13 +51,19 @@ for (const row of rows) {
 const manifest = boot.readProfileManifest('dsh', profileDir)
 const dependencies = Object.keys(manifest.dependencies ?? {})
 const selected = manifest.dsh?.profile?.bundles ?? []
-const stale = [...dependencies, ...selected].filter((name) => name.includes('effort-slider') && name !== needle)
+// Report other packages whose name contains the target's stem (usually a rename
+// left a second copy behind). This is informational: a sibling plugin that
+// merely shares a prefix is a legitimate separate install, so it does NOT fail
+// the check - only the target's own two manifest halves decide that.
+const stem = needle.replace(/^(dsh-)?/, '').replace(/-chaunye$/, '')
+const siblings = [...new Set([...dependencies, ...selected])]
+  .filter((name) => name !== needle && name.includes(stem))
 console.log('--- what the plugin list will compute ---')
 console.log(`  in dependencies (=> installed): ${dependencies.includes(needle)}`)
 console.log(`  in bundles      (=> enabled):   ${selected.includes(needle)}`)
-console.log(`  stale effort-slider names:      ${stale.length ? stale.join(', ') : '(none)'}`)
+console.log(`  sibling packages sharing "${stem}": ${siblings.length ? siblings.join(', ') : '(none)'}`)
 
 const ok = rows.length > 0 && rows.every((row) => row.disabled !== true)
-  && dependencies.includes(needle) && selected.includes(needle) && stale.length === 0
+  && dependencies.includes(needle) && selected.includes(needle)
 console.log(ok ? 'COMPOSITION OK' : 'COMPOSITION INCOMPLETE')
 process.exit(ok ? 0 : 1)

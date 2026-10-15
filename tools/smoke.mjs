@@ -281,11 +281,11 @@ console.log('case: four declared levels, current = high')
   check('the card is portaled to document.body', harness.portals.length === 1 && harness.portals[0].container === document.body,
     `portals=${harness.portals.length}`)
   const track = find(expandedTree, (node) => node.props?.role === 'slider')
-  check('track exposes the slider role with value 3/4', track.props['aria-valuenow'] === 3 && track.props['aria-valuemax'] === 4,
+  check('track exposes the slider role with 0-based value 2/3', track.props['aria-valuenow'] === 2 && track.props['aria-valuemax'] === 3,
     `${track.props['aria-valuenow']}/${track.props['aria-valuemax']}`)
   check('track value text is the level name', track.props['aria-valuetext'] === 'High', track.props['aria-valuetext'])
   const tickTexts = flatten(expandedTree)
-    .filter((node) => node.type === 'span' && typeof node.props?.children === 'string')
+    .filter((node) => node.type === 'div' && typeof node.props?.children === 'string')
     .map((node) => node.props.children)
   check('tick labels cover every level, using the display override for the top one',
     ['Off', 'Low', 'High', 'Ultra'].every((name) => tickTexts.includes(name)), JSON.stringify(tickTexts))
@@ -297,7 +297,7 @@ console.log('case: four declared levels, current = high')
   // While the selection is in flight the control shows the optimistic value.
   track.props.onKeyDown({ key: 'ArrowRight', preventDefault() {} })
   const optimistic = find(harness.render(), (node) => node.props?.role === 'slider')
-  check('optimistic readout moves immediately', optimistic.props['aria-valuenow'] === 4, String(optimistic.props['aria-valuenow']))
+  check('optimistic readout moves immediately', optimistic.props['aria-valuenow'] === 3, String(optimistic.props['aria-valuenow']))
   check('the Host call is not issued synchronously', harness.calls.length === 0, `${harness.calls.length} calls`)
   await await0()
   check('ArrowRight commits exactly one selection', harness.calls.length === 1, JSON.stringify(harness.calls))
@@ -310,7 +310,7 @@ console.log('case: four declared levels, current = high')
   // Once the shared store carries the new selection, the display follows it.
   harness.store.set(stateFor({ current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: 'max' } }))
   const settledTrack = find(harness.render(), (node) => node.props?.role === 'slider')
-  check('settled readout follows the shared store', settledTrack.props['aria-valuenow'] === 4, String(settledTrack.props['aria-valuenow']))
+  check('settled readout follows the shared store', settledTrack.props['aria-valuenow'] === 3, String(settledTrack.props['aria-valuenow']))
   settledTrack.props.onKeyDown({ key: 'ArrowRight', preventDefault() {} })
   await await0()
   check('stepping into the wall is a no-op', harness.calls.length === 1, `${harness.calls.length} calls`)
@@ -330,7 +330,7 @@ console.log('case: four declared levels, current = high')
   listeners.get('pointermove')({ clientX: 100 })   // stop 1 (low)
   check('dragging across stops commits nothing yet', harness.calls.length === 1, `${harness.calls.length} calls`)
   const dragging = find(harness.render(), (node) => node.props?.role === 'slider')
-  check('the readout previews the dragged stop', dragging.props['aria-valuenow'] === 2, String(dragging.props['aria-valuenow']))
+  check('the readout previews the dragged stop', dragging.props['aria-valuenow'] === 1, String(dragging.props['aria-valuenow']))
   listeners.get('pointerup')({})
   await await0()
   check('release commits exactly one selection, for the dragged stop', harness.calls.length === 2 && harness.calls[1].reasoningEffort === 'low',
@@ -370,36 +370,99 @@ console.log('case: a single declared level degrades to a badge')
   check('no trigger button in the degenerate case', find(tree, (node) => node.props?.className === 'dsh-effort-chip') === undefined)
 }
 
-console.log('case: the bar hue tracks the level, not just the fill width')
+console.log('case: the Codex spec drivers — fill colour, energy, particles, speed')
 {
-  const rampAt = (effort) => {
+  const parts = (effort) => {
     const harness = mount(stateFor({
       current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: effort },
     }))
     find(harness.render(), (node) => node.props?.className === 'dsh-effort-chip').props.onClick()
     const tree = harness.render()
-    const ramp = find(tree, (node) => node.props?.className === 'dsh-effort-ramp')
-    const sheen = find(tree, (node) => node.props?.className === 'dsh-effort-sheen')
-    return { ramp: ramp?.props?.style?.backgroundImage, sheen: sheen?.props?.style?.backgroundImage }
+    const track = find(tree, (node) => node.props?.role === 'slider')
+    const fill = find(tree, (node) => node.props?.className === 'dsh-effort-fill')
+    const stars = find(tree, (node) => node.props?.className === 'dsh-effort-stars')
+    const starList = flatten(stars ?? tree)
+      .filter((node) => node.props?.['data-ces-part'] === 'star')
+      .filter((node) => node.props?.style?.display !== 'none')
+    const card = find(tree, (node) => node.props?.className === 'dsh-effort-card')
+    return {
+      fill: fill?.props?.style?.background,
+      energy: Number(track?.props?.style?.['--ces-energy']),
+      stars: starList.length,
+      starOpacity: stars?.props?.style?.opacity,
+      border: card?.props?.style?.borderColor,
+    }
   }
 
-  const off = rampAt('off')
-  check('the lowest level is the theme blue ramp',
-    off.ramp === 'linear-gradient(90deg,#3964fe 0%,#398efe 50%,#6dccff 100%)', String(off.ramp))
+  const off = parts('off')
+  check('the lowest level is pure blue with no energy layer',
+    off.fill === 'linear-gradient(90deg,#4d93f8 0%,#4d93f8 100%)' && off.energy === 0,
+    `${off.fill} energy=${off.energy}`)
 
-  const ultra = rampAt('max')
-  check('the top level is the violet ramp end to end',
-    ultra.ramp === 'linear-gradient(90deg,#8b76f6 0%,#c5c0ff 50%,#8b76f6 100%)', String(ultra.ramp))
-  check('the top level ramp carries no blue stop',
-    !/3964fe|398efe|6dccff/i.test(String(ultra.ramp)), String(ultra.ramp))
+  const ultra = parts('max')
+  check('the top level reaches deep violet',
+    ultra.fill === 'linear-gradient(90deg,#4d93f8 0%,#4c1d95 100%)', String(ultra.fill))
+  check('the top level has full energy and all 22 stars',
+    ultra.energy === 1 && ultra.stars === 22, `energy=${ultra.energy} stars=${ultra.stars}`)
+  check('the top level card border is the full-strength violet frame',
+    ultra.border === 'rgba(139,92,246,0.500)', String(ultra.border))
 
-  const high = rampAt('high')
-  check('an intermediate level sits between the two ramps',
-    high.ramp !== off.ramp && high.ramp !== ultra.ramp && /#/.test(String(high.ramp)), String(high.ramp))
+  const high = parts('high')
+  check('the middle level is a violet blend at half energy with 11 stars',
+    high.fill === 'linear-gradient(90deg,#4d93f8 0%,#9333ea 100%)' && high.energy === 0.5 && high.stars === 11,
+    `${high.fill} energy=${high.energy} stars=${high.stars}`)
 
-  check('the sweep highlight fades its own level colour at both ends',
-    /^linear-gradient\(100deg,#[0-9a-f]{6}00 0%,#[0-9a-f]{6}8c 50%,#[0-9a-f]{6}00 100%\)$/.test(String(ultra.sheen)),
-    String(ultra.sheen))
+  check('stardust layer is invisible with no particles and fully visible at the top',
+    String(off.starOpacity) === '0.000' && String(ultra.starOpacity) === '1.000',
+    `off=${off.starOpacity} ultra=${ultra.starOpacity}`)
+}
+
+console.log('case: the fill and knob share the inset coordinate and ride the draft')
+{
+  const harness = mount(stateFor({ current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: 'off' } }))
+  const chip = find(harness.render(), (node) => node.props?.className === 'dsh-effort-chip')
+  chip.props.onClick()
+  const tree = harness.render()
+  const track = find(tree, (node) => node.props?.role === 'slider')
+  const knob = find(tree, (node) => node.props?.className === 'dsh-effort-knob')
+  check('the knob is rendered and positioned via the shared inset CSS variable',
+    knob !== undefined && knob.style === undefined && track.props.style['--pct'] === '0.0000',
+    `pct=${track.props.style['--pct']}`)
+
+  console.log('case: pointer drag is continuous and snaps on release')
+  const listeners = new Map()
+  const trackElement = {
+    focus() {},
+    setPointerCapture() {},
+    addEventListener: (type, fn) => listeners.set(type, fn),
+    removeEventListener: (type) => listeners.delete(type),
+    getBoundingClientRect: () => ({ left: 0, width: 300, top: 0, height: 28, right: 300, bottom: 28 }),
+  }
+  track.props.onPointerDown({ currentTarget: trackElement, clientX: 14, pointerId: 1 })
+  const midDrag = find(harness.render(), (node) => node.props?.role === 'slider')
+  check('the draft position drives the knob continuously (14px → pct 0)',
+    midDrag.props.style['--pct'] === '0.0000', String(midDrag.props.style['--pct']))
+  listeners.get('pointermove')({ clientX: 150 })
+  const halfway = find(harness.render(), (node) => node.props?.role === 'slider')
+  const midPct = Number(halfway.props.style['--pct'])
+  check('mid-drag lands between stops (continuous, not snapped)',
+    midPct > 0.3 && midPct < 0.7, String(midPct))
+  listeners.get('pointermove')({ clientX: 286 })  // right inset edge
+  listeners.get('pointerup')({})
+  // Read synchronously, before the micro-task queue clears the optimistic
+  // pending state: with a real RPC the pending window is visible, but here the
+  // fake select resolves inside one micro-task.
+  const optimistic = find(harness.render(), (node) => node.props?.role === 'slider')
+  check('release snaps to the nearest level (pct 1, optimistic)',
+    optimistic.props.style['--pct'] === '1.0000', String(optimistic.props.style['--pct']))
+  await await0()
+  check('release commits exactly one selection (the top level)',
+    harness.calls.length === 1 && harness.calls[0].reasoningEffort === 'max',
+    JSON.stringify(harness.calls))
+  harness.store.set(stateFor({ current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: 'max' } }))
+  const settled = find(harness.render(), (node) => node.props?.role === 'slider')
+  check('after the store catches up, the knob stays at pct 1',
+    settled.props.style['--pct'] === '1.0000', String(settled.props.style['--pct']))
 }
 
 console.log('')
