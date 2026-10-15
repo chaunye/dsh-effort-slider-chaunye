@@ -479,6 +479,47 @@ console.log('case: the fill and knob share the inset coordinate and ride the dra
     settled.props.style['--pct'] === '1.0000', String(settled.props.style['--pct']))
 }
 
+console.log('case: lightning mode speeds animations up without touching the wire value')
+{
+  const harness = mount(stateFor({ current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: 'max' } }))
+  find(harness.render(), (node) => node.props?.className === 'dsh-effort-chip').props.onClick()
+  const tree = harness.render()
+
+  const bolt = find(tree, (node) => node.props?.className === 'dsh-effort-bolt')
+  check('the lightning toggle renders beside the title', bolt !== undefined)
+  check('it starts off (aria-pressed=false)', bolt !== undefined && bolt.props['aria-pressed'] === false)
+
+  // OFF: stardust at the Codex-spec pace (max level → 1.5s), shimmer at 2.2s.
+  const starsOff = flatten(tree).filter((node) => node.props?.['data-ces-part'] === 'star' && node.props?.style?.display !== 'none')
+  const normalSeconds = starsOff.length > 0 ? parseFloat(starsOff[0].props.style.animationDuration) : null
+  check('OFF: top-level stars run at the spec pace (~1.5s)',
+    normalSeconds !== null && Math.abs(normalSeconds - 1.5) < 0.1, String(normalSeconds))
+  const shimmerOff = find(tree, (node) => node.props?.['data-ces-part'] === 'shimmer')
+  check('OFF: shimmer runs at 2.2s', shimmerOff?.props?.style?.animationDuration === undefined,
+    String(shimmerOff?.props?.style?.animationDuration))
+
+  bolt.props.onClick()
+  const onTree = harness.render()
+  const boltOn = find(onTree, (node) => node.props?.className === 'dsh-effort-bolt')
+  check('clicking toggles it on (aria-pressed=true)', boltOn.props['aria-pressed'] === true)
+
+  const starsOn = flatten(onTree).filter((node) => node.props?.['data-ces-part'] === 'star' && node.props?.style?.display !== 'none')
+  const fastSeconds = starsOn.length > 0 ? parseFloat(starsOn[0].props.style.animationDuration) : null
+  check('ON: stars run ~2.5× faster (1.5s → 0.6s)',
+    fastSeconds !== null && Math.abs(fastSeconds - 0.6) < 0.1, String(fastSeconds))
+  const shimmerOn = find(onTree, (node) => node.props?.['data-ces-part'] === 'shimmer')
+  check('ON: shimmer speeds up too (2.2s → 0.88s)',
+    shimmerOn?.props?.style?.animationDuration === (2.2 / 2.5).toFixed(2) + 's',
+    String(shimmerOn?.props?.style?.animationDuration))
+
+  // The toggle is presentation-only: no selection is written, the committed
+  // effort stays exactly what it was.
+  check('toggling lightning writes nothing to the Host', harness.calls.length === 0, JSON.stringify(harness.calls))
+  const still = find(harness.render(), (node) => node.props?.role === 'slider')
+  check('the committed effort is unchanged (aria-valuenow stays 3)',
+    still.props['aria-valuenow'] === 3, String(still.props['aria-valuenow']))
+}
+
 console.log('')
 if (failures === 0) console.log('smoke: all checks passed')
 else console.log(`smoke: ${failures} check(s) failed`)

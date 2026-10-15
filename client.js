@@ -92,6 +92,8 @@ window.__ModuleLoader__.load({
     const REDUCED_SLOWDOWN = 2.6;      // prefers-reduced-motion: slow, don't freeze
     const ENERGY_START = 1 / 3;
     const ENERGY_END = 2 / 3;
+    /** Lightning mode: multiplies every animation speed (stardust + shimmer). */
+    const LIGHTNING_SPEEDUP = 2.5;
 
     const DICT = {
       zh: {
@@ -99,12 +101,16 @@ window.__ModuleLoader__.load({
         effortDefault: '默认',
         badgeSingle: '推理等级：',
         errorSessionInUse: '该会话正被另一处 DSH 占用，请退出其他 DSH 后重试',
+        lightning: '闪电模式：动效加速',
+        lightningOn: '闪电模式已开启（动效 ×2.5）',
       },
       en: {
         title: 'Reasoning effort',
         effortDefault: 'Default',
         badgeSingle: 'Reasoning effort: ',
         errorSessionInUse: 'This session is held by another DSH instance — close it and retry',
+        lightning: 'Lightning mode: faster animations',
+        lightningOn: 'Lightning mode on (animations ×2.5)',
       },
     };
 
@@ -217,6 +223,17 @@ window.__ModuleLoader__.load({
       'font-size:13px;line-height:20px;user-select:none;-webkit-user-select:none}',
       '.dsh-effort-title{display:block;text-align:center;font-size:15px;line-height:22px;font-weight:600;',
       'transition:color 100ms ease}',
+      /* Lightning toggle: a small bolt right of the centered title. ON = amber
+         fill + pulse; OFF = caption-coloured outline. */
+      '.dsh-effort-titlebar{display:flex;align-items:center;justify-content:center;gap:6px}',
+      '.dsh-effort-bolt{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;',
+      'padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;',
+      'color:var(--dsw-alias-label-caption);cursor:pointer;font:inherit;flex:0 0 auto}',
+      '.dsh-effort-bolt:hover{background:var(--dsw-alias-interactive-bg-hover)}',
+      '.dsh-effort-bolt[aria-pressed="true"]{color:var(--dsw-alias-state-warn-primary,#f59e0b);',
+      'animation:dsh-effort-bolt-pulse 1.2s ease-in-out infinite}',
+      '.dsh-effort-bolt:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}',
+      '@keyframes dsh-effort-bolt-pulse{0%,100%{opacity:1}50%{opacity:.55}}',
       '.dsh-effort-sub{display:block;text-align:center;color:var(--dsw-alias-label-caption);font-size:11px;',
       'line-height:16px;margin-top:2px}',
       /* ── inset capsule track: knob, fill edge and ticks share one coordinate ── */
@@ -492,12 +509,18 @@ window.__ModuleLoader__.load({
       const isOff = shownLevel !== undefined && shownLevel.id === 'off';
       const label = shownLevel !== undefined ? labelOf(shownLevel) : tr('effortDefault');
 
+      // Lightning mode is a pure presentation toggle: it multiplies animation
+      // speeds and never touches the committed effort.
+      const [lightning, setLightning] = React.useState(false);
+
       const energy = energyFor(shownPct);
       const starCount = particleCountFor(shownPct);
       const starOpacity = starLayerOpacityFor(shownPct);
       const reduced = typeof window.matchMedia === 'function'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const slowdown = reduced ? REDUCED_SLOWDOWN : 1;
+      // slow-down and speed-up multiply the DURATION: reduced-motion stretches
+      // it, lightning shortens it by the speed-up factor.
+      const durationFactor = (reduced ? REDUCED_SLOWDOWN : 1) / (lightning ? LIGHTNING_SPEEDUP : 1);
       const baseSeconds = starBaseSeconds(shownPct);
 
       const activeColor = valueColorFor(committedPct, selectedIndex >= 0 && levels.efforts[selectedIndex].id === 'off');
@@ -543,7 +566,7 @@ window.__ModuleLoader__.load({
       const starNodes = [];
       for (let s = 0; s < MAX_PARTICLES; s += 1) {
         const particle = PARTICLES[s];
-        const seconds = baseSeconds * (1 + particle.spread01 * STAR_DURATION_SPREAD) * slowdown;
+        const seconds = baseSeconds * (1 + particle.spread01 * STAR_DURATION_SPREAD) * durationFactor;
         starNodes.push(h('span', {
           key: 'star-' + s,
           className: 'dsh-effort-star',
@@ -592,7 +615,11 @@ window.__ModuleLoader__.load({
         style: { background: 'linear-gradient(90deg,' + FILL_BLUE + ' 0%,' + fillColorFor(shownPct) + ' 100%)' },
       }),
       h('span', { className: 'dsh-effort-nebula', 'data-ces-part': 'nebula' },
-        h('span', { className: 'dsh-effort-shimmer', 'data-ces-part': 'shimmer' })),
+        h('span', {
+          className: 'dsh-effort-shimmer',
+          'data-ces-part': 'shimmer',
+          style: lightning ? { animationDuration: (2.2 / LIGHTNING_SPEEDUP).toFixed(2) + 's' } : undefined,
+        })),
       h('span', {
         className: 'dsh-effort-stars',
         'data-ces-part': 'stars',
@@ -629,7 +656,28 @@ window.__ModuleLoader__.load({
           boxShadow: 'var(--dsw-elevation-prominent),0 0 24px rgba(' + CARD_RGB + ',' + (0.22 * energy).toFixed(3) + ')',
         },
       },
-      h('span', { className: 'dsh-effort-title', style: { color: valueColorFor(shownPct, isOff) } }, label),
+      h('span', { className: 'dsh-effort-titlebar' },
+        h('span', { className: 'dsh-effort-title', style: { color: valueColorFor(shownPct, isOff) } }, label),
+        h('button', {
+          type: 'button',
+          className: 'dsh-effort-bolt',
+          'data-ces-part': 'bolt',
+          'aria-pressed': lightning,
+          'aria-label': lightning ? tr('lightningOn') : tr('lightning'),
+          title: lightning ? tr('lightningOn') : tr('lightning'),
+          onClick: () => setLightning((on) => !on),
+        },
+        h('svg', {
+          width: 13, height: 13, viewBox: '0 0 24 24', 'aria-hidden': true, focusable: false,
+          style: { display: 'block' },
+        }, h('path', {
+          d: 'M13 2 4.5 13.5h6L9 22l9.5-12h-6L13 2Z',
+          fill: lightning ? 'currentColor' : 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.6,
+          strokeLinejoin: 'round',
+        }))),
+      ),
       // The small line under the level name names the model, the way the
       // reference slider does; the tick row already shows where the knob sits.
       h('span', { className: 'dsh-effort-sub' }, levels.modelName),
