@@ -57,8 +57,18 @@ function createHookRuntime() {
   let pendingEffects = []
   let cleanups = []
 
+  // Hook-order enforcement, the way real React does it: every render records the
+  // kind of hook it called at each slot, and a render whose sequence differs from
+  // the previous one throws. Without this the harness happily accepted a hook
+  // behind an early return — which is exactly the bug that made the slider vanish
+  // on a live profile (full story in the "hook order" case below).
+  let sequence = []
+  let previousSequence = null
+
   const schedule = () => { scheduled = true }
   let scheduled = false
+
+  const record = (kind) => { sequence.push(kind); return cursor++ }
 
   const React = {
     createElement(type, props, ...children) {
@@ -66,7 +76,7 @@ function createHookRuntime() {
       return { type, props: { ...(props ?? {}), children: kids } }
     },
     useState(initial) {
-      const i = cursor++
+      const i = record('useState')
       if (!(i in hooks)) hooks[i] = typeof initial === 'function' ? initial() : initial
       const set = (value) => {
         hooks[i] = typeof value === 'function' ? value(hooks[i]) : value
@@ -75,12 +85,12 @@ function createHookRuntime() {
       return [hooks[i], set]
     },
     useRef(initial) {
-      const i = cursor++
+      const i = record('useRef')
       if (!(i in hooks)) hooks[i] = { current: initial }
       return hooks[i]
     },
     useEffect(fn, deps) {
-      const i = cursor++
+      const i = record('useEffect')
       const previous = hooks[i]
       const changed = previous === undefined || deps === undefined || deps.length !== previous.deps.length
         || deps.some((dep, index) => !Object.is(dep, previous.deps[index]))
@@ -90,7 +100,7 @@ function createHookRuntime() {
       }
     },
     useSyncExternalStore(subscribe, getSnapshot) {
-      const i = cursor++
+      const i = record('useSyncExternalStore')
       if (!(i in hooks)) hooks[i] = { subscribe, unsubscribe: undefined }
       hooks[i].subscribe = subscribe
       return getSnapshot()
@@ -101,9 +111,21 @@ function createHookRuntime() {
     React,
     render(component, props) {
       cursor = 0
+      sequence = []
       pendingEffects = []
       scheduled = false
       const tree = component(props)
+      // Compare this render's hook sequence with the previous one, the way React
+      // does. A differing sequence means a hook sits behind a branch, which real
+      // React rejects with "Rendered more hooks than during the previous render"
+      // and which retires the whole slot entry on the live host.
+      if (previousSequence !== null && sequence.join(',') !== previousSequence.join(',')) {
+        throw new Error(
+          `hook order changed between renders: previous [${previousSequence.join(', ')}] `
+          + `vs next [${sequence.join(', ')}] — a hook is behind a conditional return`,
+        )
+      }
+      previousSequence = sequence
       for (const effect of pendingEffects) {
         const cleanup = effect()
         if (typeof cleanup === 'function') cleanups.push(cleanup)
@@ -260,6 +282,54 @@ console.log('case: model that declares no reasoning levels')
 {
   const harness = mount(stateFor({ groups: [] }))
   check('renders nothing while the catalog has no group', harness.render() === null)
+}
+
+// ⚠️ 回归锁：真实启动的第一帧**必然**没有档位 —— 会话模型目录首帧
+//    status="loading"、groups=[]，`levelsOf()` 返回 null，组件走
+//    `if (!hasLevels) return null`；目录随后到达，同一个组件实例带着四个档位
+//    重渲染。只要有 hook 排在那些提前 return 之后，这一帧就会改变 hook 序列，
+//    真实 React 抛 "Rendered more hooks than during the previous render"，
+//    renderer 随即 abdicate 掉整个 slot 条目 —— 用户看到的就是"进 DSH 不显示，
+//    手动关开插件才恢复"。
+//    这个用例在修复前必须失败（历史上它通过了，因为 harness 的假 React 不校验
+//    hook 顺序，于是 bug 一路发到了线上）。
+console.log('case: hook order survives the loading -> loaded catalog transition')
+{
+  const harness = mount(stateFor({ current: null, groups: [], status: 'loading' }))
+  const loading = harness.render()
+  check('the loading frame renders nothing', loading === null)
+  let transitionError = null
+  try {
+    harness.store.set(stateFor())
+    const loaded = harness.render()
+    check('the loaded frame renders the chip', find(loaded, (node) => node.props?.className === 'dsh-effort-chip') !== undefined)
+  } catch (error) {
+    transitionError = error
+  }
+  check('the render after the catalog arrives keeps the hook order', transitionError === null,
+    transitionError === null ? '' : transitionError.message)
+}
+// The same transition through the degenerate branch: the catalog arrives with a
+// single declared level (badge), then the model gains a full level list.
+{
+  const harness = mount(stateFor({ current: null, groups: [], status: 'loading' }))
+  harness.render()
+  let transitionError = null
+  try {
+    harness.store.set(stateFor({
+      groups: [{ id: 'diandian', name: 'diandian', models: [{ id: 'DeepSeek-V4.1-Flash', name: 'x', reasoning: { efforts: [EFFORTS[0]], defaultEffort: 'off' } }] }],
+      current: { provider: 'diandian', model: 'DeepSeek-V4.1-Flash', reasoningEffort: 'off' },
+    }))
+    const one = harness.render()
+    check('the single-level frame renders the badge', find(one, (node) => node.props?.className === 'dsh-effort-badge') !== undefined)
+    harness.store.set(stateFor())
+    const many = harness.render()
+    check('badge -> slider keeps the hook order', find(many, (node) => node.props?.className === 'dsh-effort-chip') !== undefined)
+  } catch (error) {
+    transitionError = error
+  }
+  check('the degenerate branch does not shift the hook order', transitionError === null,
+    transitionError === null ? '' : transitionError.message)
 }
 
 console.log('case: four declared levels, current = high')

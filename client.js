@@ -353,6 +353,19 @@ window.__ModuleLoader__.load({
       const [pending, setPending] = React.useState(null);
       const [error, setError] = React.useState(null);
       const [pos, setPos] = React.useState(null);
+      // Lightning mode is a pure presentation toggle: it multiplies animation
+      // speeds and never touches the committed effort.
+      //
+      // ⚠️ 回归锁：这个 hook 必须和其他 hook 一起排在**所有提前 return 之前**。
+      //    它原先写在 `if (!hasLevels) return null` 与 `if (count < 2)` 之下，
+      //    而这两条分支在真实启动时必然先走一遍（会话目录首帧 status=loading，
+      //    `groups` 为空 ⇒ levelsOf() 返回 null）。等目录到达、同一组件实例带着
+      //    档位重渲染时，hook 序列就比上一帧多一个，React 抛
+      //    "Rendered more hooks than during the previous render"，slot 条目被
+      //    abdicate 而整块 UI 消失 —— 这正是"进 DSH 不显示、手动关开插件才好"
+      //    的根因（关开插件会重建 fiber，让首帧就带档位）。
+      //    tools/smoke.mjs 的 "hook order" 用例在改动此处时会失败。
+      const [lightning, setLightning] = React.useState(false);
       const triggerRef = React.useRef(null);
       const cardRef = React.useRef(null);
       const draftRef = React.useRef(null);
@@ -508,10 +521,6 @@ window.__ModuleLoader__.load({
       const shownLevel = shownIndex >= 0 ? levels.efforts[shownIndex] : undefined;
       const isOff = shownLevel !== undefined && shownLevel.id === 'off';
       const label = shownLevel !== undefined ? labelOf(shownLevel) : tr('effortDefault');
-
-      // Lightning mode is a pure presentation toggle: it multiplies animation
-      // speeds and never touches the committed effort.
-      const [lightning, setLightning] = React.useState(false);
 
       const energy = energyFor(shownPct);
       const starCount = particleCountFor(shownPct);
